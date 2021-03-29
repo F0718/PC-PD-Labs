@@ -1,0 +1,223 @@
+PortA EQU 00
+PortB EQU 01
+PortC EQU 02
+PortD EQU 03
+
+LoadL 	EQU 00010000b
+LoadH 	EQU 00001000b
+CLK   	EQU 00000010b
+CLK_READY   EQU 00000011b
+CLK_Zero    EQU 00000001b
+
+SetAdress  EQU 00100000b
+SaveAdress EQU 00000100b
+
+SetData  EQU 01000000b
+SaveData EQU 10000000b
+
+org 00h
+jp start
+
+org 38h
+jp int
+
+
+org 100h
+start:
+EI
+;----
+;загружаем адрес в мп1:
+LD A,SetAdress
+OUT (PortC),A  ; пропускаем адрес на общую шину
+LD A,SaveAdress
+OUT (PortC),A
+IN A,(PortB);сохраняем адрес в аккамулятор
+;передаем адрес на мк2:
+;сначала передадим мл.слово адреса:
+LD A,LoadL
+OUT (PortC),A
+
+IN A,(PortB); загружаю данные в аккамулятор
+
+
+OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+;данные загружены
+CALL give_data_LI;
+;----------------
+LD A,25d
+wait_loop:
+DEC A
+JP NZ,wait_loop
+;----------------
+LD A,LoadH
+OUT (PortC),A
+
+IN A,(PortB); загружаю данные в аккамулятор
+RRCA
+RRCA
+RRCA
+RRCA
+
+OUT (PortA),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+;данные загружены
+CALL give_data_LI;
+
+
+
+;--------АДРЕСС УЖЕ ЗАГРУЖЕН В ЗУ-----------------------
+
+IN A,(PortB)
+BIT 7,A
+JP NZ, READ
+
+;----------------
+LD A,25d
+wait_loop1:
+DEC A
+JP NZ,wait_loop1
+;----------------
+
+
+
+;Нужно передать данные на ЗУ в 4 захода (порциями по 4 бита)
+;1:
+LD A,SetData
+OUT (PortC),A ; открываем буфер для данных
+
+LD A,SaveData
+OUT (PortC),A ; сохраняем данные в регистре
+
+LD A,LoadL
+OUT (PortC),A
+
+IN A,(PortD) ; ;получаем биты: 0-3
+
+OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop2:
+DEC A
+JP NZ,wait_loop2
+;----------------
+
+;2:
+LD A,LoadH
+OUT (PortC),A
+
+IN A,(PortD)
+;получаем биты: 4-7
+RRCA
+RRCA
+RRCA
+RRCA
+
+OUT (PortA),A
+
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop3:
+DEC A
+JP NZ,wait_loop3
+;----------------
+
+
+;----------ТЕПЕРЬ ЗАГРУЖАЕМ 2-ОЙ БАЙТ (8-15)-----------
+
+;3:
+;нужно ли снова загружать данные в регистр?
+LD A,LoadL
+OUT (PortC),A
+
+IN A,(PortC) ; ;получаем биты: 0-3
+
+OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop4:
+DEC A
+JP NZ,wait_loop4
+;----------------
+
+;4:
+LD A,LoadH
+OUT (PortC),A
+
+IN A,(PortC)
+;получаем биты: 4-7
+RRCA
+RRCA
+RRCA
+RRCA
+
+OUT (PortA),A
+
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;---
+
+inf_loop1:
+
+jp inf_loop1
+
+
+give_data_LI:
+LD B,04h
+
+loop1:
+
+LD A,CLK_READY
+OUT (PortC),A
+
+LD A,CLK_Zero
+OUT (PortC),A
+
+DEC B
+JP NZ,loop1
+
+RET
+
+
+READ:
+inf_loop2:
+jp inf_loop2
+
+int:
+IN A,(PortA)
+OUT (PortD),A
+EI
+RET
+
