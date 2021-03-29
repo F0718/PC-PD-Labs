@@ -1,0 +1,287 @@
+PortA EQU 00
+PortB EQU 01
+PortC EQU 02
+PortD EQU 03
+
+LoadL 	EQU 00010000b
+LoadH 	EQU 00001000b
+CLK   	EQU 00000010b
+CLK_READY   EQU 00000011b
+CLK_Zero    EQU 00000001b
+;;;
+SET_ADRESS_LOW  EQU 00010000b
+SET_ADRESS_HIGH EQU 00100000b
+SET_ADRESS_FULL EQU 0100000b 
+;;;
+
+
+SetAdress EQU 00100000b
+
+org 00h
+jp start
+
+org 38h
+jp int
+
+
+org 100h
+start:
+EI
+
+inf_loop:
+jp inf_loop
+
+int:
+IN A,(PortB)
+BIT 7,A ;0-write,1-read
+JP Z,WRITE ;
+JP NZ,READ ; проверяем,что должно сейчас произойти: запись или чтение
+
+WRITE:
+IN A,(PortB)
+
+BIT 0,A ;если нулевой бит = 1, то записываем мл.часть адреса
+JP NZ,LOAD_L
+
+BIT 1,A ;если первый бит = 1, то записываем ст.часть адреса
+JP NZ,LOAD_H
+
+BIT 2,A ;если второй бит = 1, то записываем весь адрес
+;JP NZ,LOAD_FULL
+
+BIT 3,A
+JP NZ,LOAD_DATA_1
+
+BIT 4,A
+JP NZ,LOAD_DATA_2
+
+BIT 5,A
+JP NZ,LOAD_DATA_3
+
+BIT 6,A
+JP NZ,LOAD_DATA_4
+
+;-----------------------АДРЕС--------------------------
+;ЗАДАДИМ АДРЕСС В 3 ЭТАПА:
+;1: {
+LOAD_L:
+IN A,(PortA);сохр.мл.слово адреса в аккум-ор
+SET 4,A
+OUT (PortD),A;выдаем.мл.слово адреса на вых.порт
+;SET 4,A
+;LD A,SET_ADRESS_LOW
+;OUT (PortD),A ;} записываем мл.часть адреса в первый регистр
+JP end
+;2: {
+LOAD_H:
+IN A,(PortA);сохр.ст.слово адреса в аккум-ор
+SET 5,A
+OUT (PortD),A;выдаем.ст.слово адреса на вых.порт
+;SET 5,A
+;LD A,SET_ADRESS_HIGH
+;OUT (PortD),A ;}записываем ст.часть адреса во второй регистр
+;3: {
+LOAD_FULL:
+IN A,(PortA);сохр.ст.слово адреса в аккум-ор
+SET 6,A
+OUT (PortD),A;выдаем.ст.слово адреса на вых.порт
+;!!!RES 5,A
+;SET 6,A
+;LD A,SET_ADRESS_FULL
+;OUT (PortD),A ;}записываем ст.часть адреса во второй регистр
+
+
+IN A,(PortB)
+BIT 7,A
+JP NZ,READ_NEXT
+JP end
+
+;-----------------------ДАННЫЕ--------------------------
+;ЗАДАДИМ ДАННЫЕ В 4 ЭТАПА:
+;1
+LOAD_DATA_1:
+
+IN A,(PortA);сохр.мл.слово адреса в аккум-ор
+SET 4,A
+OUT (PortD),A
+
+jp end
+
+;2
+LOAD_DATA_2:
+
+IN A,(PortA);сохр.мл.слово адреса в аккум-ор
+SET 5,A
+OUT (PortD),A
+
+jp end
+
+;3
+LOAD_DATA_3:
+
+IN A,(PortA);сохр.мл.слово адреса в аккум-ор
+SET 7,A
+OUT (PortD),A
+
+
+jp end
+
+;4
+LOAD_DATA_4:
+
+IN A,(PortA);сохр.мл.слово адреса в аккум-ор
+;SET 4,A
+OUT (PortD),A
+LD A,0
+SET 7,A
+OUT (PortC),A
+;далее загружаю ВСЕ данные в 16б регистр
+
+LD A,0
+SET 2,A
+OUT (PortC),A ; все данные (16б) на регистре
+
+;подаем WR
+LD A,0
+SET 5,A
+
+OUT (PortC),A
+
+jp end
+
+
+READ:
+IN A,(PortB)
+
+BIT 0,A ;если нулевой бит = 1, то записываем мл.часть адреса
+JP NZ,LOAD_L
+
+BIT 1,A ;если первый бит = 1, то записываем ст.часть адреса
+JP NZ,LOAD_H
+
+BIT 2,A ;если второй бит = 1, то записываем весь адрес
+JP NZ,LOAD_FULL
+
+READ_NEXT: ; адрес установлен на ЗУ
+;1:
+LD A,LoadL
+OUT (PortC),A
+
+IN A,(PortD) ; сохр.мл.байт
+
+OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop2:
+DEC A
+JP NZ,wait_loop2
+;----------------
+
+;2:
+LD A,LoadH
+OUT (PortC),A
+
+IN A,(PortD) ; сохр.мл.байт
+
+RRCA
+RRCA
+RRCA
+RRCA
+
+OUT (PortA),A;OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop3:
+DEC A
+JP NZ,wait_loop3
+;----------------
+
+;3:
+LD A,LoadL
+OUT (PortC),A
+
+IN A,(PortC) ; сохр.мл.байт
+
+OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop4:
+DEC A
+JP NZ,wait_loop4
+;----------------
+
+;4:
+LD A,LoadH
+OUT (PortC),A
+
+IN A,(PortC) ; сохр.мл.байт
+
+RRCA
+RRCA
+RRCA
+RRCA
+
+OUT (PortA),A;OUT (PortB),A 
+LD A,CLK
+OUT (PortC),A ; подаю CLK на OUT->загружаю данные в LO
+LD A,CLK_Zero
+OUT (PortC),A
+
+CALL give_data_LI;данные загружены
+
+;----------------
+LD A,25d
+wait_loop5:
+DEC A
+JP NZ,wait_loop5
+;----------------
+
+
+
+
+inf_loop1:
+jp inf_loop1
+
+end:
+EI 
+RET
+;---
+give_data_LI:
+LD B,04h
+
+loop1:
+
+LD A,CLK_READY
+OUT (PortC),A
+
+LD A,CLK_Zero
+OUT (PortC),A
+
+DEC B
+JP NZ,loop1
+
+RET
+
+
+
