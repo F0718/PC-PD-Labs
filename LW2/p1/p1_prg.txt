@@ -6,7 +6,13 @@ PortD EQU 03
 SetAdr  EQU 00000100b
 SetData EQU 00001000b
 SetL    EQU 00001001b
-SetH    EQU 00001010b	
+SetH    EQU 00001010b
+;---
+Buf_enA EQU 00010000b
+CLK_A   EQU 00110000b
+
+Buf_enD EQU 01000000b
+CLK_D   EQU 11000000b	
 
 org 00h
 jp start
@@ -27,12 +33,21 @@ OUT (PortC),A;пропускаю на общую шину адрес
 IN A,(PortB); сохранили адрес в аккамулятор
 OUT (PortA),A;задаем адрес на RAM
 
+;--
+LD A,Buf_enA
+OUT (PortC),A ; открываем буфер
+
+LD A,CLK_A
+OUT (PortC),A; загружаем адрес в регистр
+;--
+
+
 ;L
 IN A,(PortD); сохр в аккамулятор мл.байт
 OUT (PortB),A;выдаю мл.байт на выход
 
 ;H
-IN A,(PortC); сохр в аккамулятор мл.байт
+IN A,(PortC); сохр в аккамулятор ст.байт
 OUT (PortB),A;выдаю ст.байт на выход
 
 
@@ -47,13 +62,29 @@ OUT (PortC),A;пропускаю на общую шину адрес
 
 IN A,(PortB); сохранили адрес в аккамулятор
 OUT (PortA),A;задаем адрес на RAM
+
 ;--
+LD A,Buf_enA
+OUT (PortC),A ; открываем буфер
+
+LD A,CLK_A
+OUT (PortC),A; загружаем адрес в регистр
+;--
+
 LD A,SetData
 OUT (PortC),A;пропускаю на общую шину данные
 
 ;L
 IN A,(PortD); сохр в аккамулятор мл.байт
 OUT (PortD),A;выдаю мл.байт на RAM
+
+;--
+LD A,Buf_enD
+OUT (PortC),A
+
+LD A,CLK_D
+OUT (PortC),A
+;--
 
 LD A,SetL
 OUT (PortC),A;упр.сигнал для записи мл.байта
@@ -64,6 +95,14 @@ OUT (PortC),A;пропускаю на общую шину данные
 ;H
 IN A,(PortC); сохр в аккамулятор ст.байт
 OUT (PortD),A;выдаю ст.байт на RAM
+
+;--
+LD A,Buf_enD
+OUT (PortC),A
+
+LD A,CLK_D
+OUT (PortC),A
+;--
 
 LD A,SetH
 OUT (PortC),A;упр.сигнал для записи ст.байта
